@@ -164,6 +164,52 @@ class Statuses(Stream):
         self.write_page(priorities)
 
 
+class Boards(Stream):
+    @staticmethod
+    def fetch_board_ids():
+        pager = Paginator(Context.client, items_key="values")
+        path = "/rest/agile/1.0/board"
+
+        board_ids = []
+
+        for page in pager.pages("boards", "GET", path):
+            board_ids.extend(
+                board["id"] for board in page
+            )
+
+        return board_ids
+
+    def sync(self):
+        pager = Paginator(Context.client, items_key="values")
+        path = "/rest/agile/1.0/board"
+
+        for page in pager.pages(self.tap_stream_id, "GET", path):
+            self.write_page(page)
+
+
+class Epics(Stream):
+    def sync(self):
+        board_ids = Boards.fetch_board_ids()
+
+        for board_id in board_ids:
+            pager = Paginator(Context.client, items_key="values")
+            path = f"/rest/agile/1.0/board/{board_id}/epic"
+
+            for page in pager.pages(self.tap_stream_id, "GET", path):
+                self.write_page(page)
+
+
+class Sprints(Stream):
+    def sync(self):
+        board_ids = Boards.fetch_board_ids()
+
+        for board_id in board_ids:
+            pager = Paginator(Context.client, items_key="values")
+            path = f"/rest/agile/1.0/board/{board_id}/sprint"
+
+            for page in pager.pages(self.tap_stream_id, "GET", path):
+                self.write_page(page)
+
 class Issues(Stream):
 
     def sync(self):
@@ -263,24 +309,17 @@ ISSUE_TRANSITIONS = Stream("issue_transitions", ["id"],
                            indirect_stream=True)
 PROJECTS = Projects("projects", ["id"])
 CHANGELOGS = Stream("changelogs", ["id"], indirect_stream=True)
+BOARDS = Boards("boards", ["id"])
+SPRINTS = Sprints("sprints", ["id"])
+EPICS = Epics("epics", ["id"])
 
 ALL_STREAMS = [
     PROJECTS,
-    VERSIONS,
-    COMPONENTS,
-    ProjectTypes("project_types", ["key"]),
-    Stream("project_categories", ["id"], path="/rest/api/2/projectCategory"),
-    Stream("issue_types", ["id"], path="/rest/api/2/issuetype"),
-    Stream("resolutions", ["id"], path="/rest/api/2/resolution"),
-    Stream("roles", ["id"], path="/rest/api/2/role"),
-    Stream("users", ["accountId"], path="/rest/api/2/users/search"),
-    Statuses("statuses", ["id"]),
-    IssuePriorities("issue_priorities", ["id"]),
+    BOARDS,
+    SPRINTS,
+    EPICS,
     ISSUES,
-    ISSUE_COMMENTS,
-    CHANGELOGS,
-    ISSUE_TRANSITIONS,
-    Worklogs("worklogs", ["id"]),
+    Stream("users", ["accountId"], path="/rest/api/2/users/search")
 ]
 
 ALL_STREAM_IDS = [s.tap_stream_id for s in ALL_STREAMS]
